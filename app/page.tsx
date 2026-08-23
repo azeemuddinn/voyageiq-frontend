@@ -35,17 +35,20 @@ export default function Home() {
   useEffect(() => {
     fetchDocuments();
   }, []);
+const [loadingDocs, setLoadingDocs] = useState(true);
 
-  const fetchDocuments = async () => {
-    try {
-      const res = await fetch(`${BACKEND_URL}/documents`);
-      const data = await res.json();
-      if (res.ok) setDocuments(data.documents);
-    } catch (err) {
-      console.error("Failed to fetch documents");
-    }
-  };
-
+const fetchDocuments = async () => {
+  setLoadingDocs(true);
+  try {
+    const res = await fetch(`${BACKEND_URL}/documents`);
+    const data = await res.json();
+    if (res.ok) setDocuments(data.documents);
+  } catch (err) {
+    console.error("Failed to fetch documents");
+  } finally {
+    setLoadingDocs(false);
+  }
+};
   useEffect(() => {
     const saved = localStorage.getItem("voyageiq-theme");
     const prefersDark = window.matchMedia(
@@ -332,47 +335,66 @@ export default function Home() {
             )}
 
             <ul className="mt-4 space-y-1.5">
-              {documents.map((doc) => (
-                <li
-                  key={doc.id}
-                  className="flex items-center justify-between px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <svg
-                      className="w-4 h-4 text-slate-400 dark:text-slate-500 shrink-0"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                      />
-                    </svg>
-                    <span className="truncate text-slate-700 dark:text-slate-300 text-xs">
-                      {doc.title}
+              {loadingDocs ? (
+                Array.from({ length: 2 }).map((_, i) => (
+                  <li
+                    key={i}
+                    className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 animate-pulse"
+                  >
+                    <div className="flex items-center gap-2.5 w-1/2">
+                      <div className="w-4 h-4 rounded bg-slate-200 dark:bg-slate-800" />
+                      <div className="h-3 w-full rounded bg-slate-200 dark:bg-slate-800" />
+                    </div>
+                    <div className="h-4 w-12 rounded-full bg-slate-200 dark:bg-slate-800" />
+                  </li>
+                ))
+              ) : documents.length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-3">
+                  No documents indexed yet.
+                </p>
+              ) : (
+                documents.map((doc) => (
+                  <li
+                    key={doc.id}
+                    className="flex items-center justify-between px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <svg
+                        className="w-4 h-4 text-slate-400 dark:text-slate-500 shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                        />
+                      </svg>
+                      <span className="truncate text-slate-700 dark:text-slate-300 text-xs">
+                        {doc.title}
+                      </span>
+                    </div>
+                    <span className="inline-flex items-center gap-1 shrink-0 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-0.5">
+                      <svg
+                        className="w-2.5 h-2.5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="3"
+                          d="M5 13l4 4L19 7"
+                        />
+                      </svg>
+                      Indexed
                     </span>
-                  </div>
-                  <span className="inline-flex items-center gap-1 shrink-0 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-0.5">
-                    <svg
-                      className="w-2.5 h-2.5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="3"
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                    Indexed
-                  </span>
-                </li>
-              ))}
+                  </li>
+                ))
+              )}
             </ul>
           </section>
         </div>

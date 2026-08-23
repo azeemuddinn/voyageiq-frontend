@@ -22,33 +22,40 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [uploadingPdf, setUploadingPdf] = useState(false);
   const [savingText, setSavingText] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const BACKEND_URL =
     process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:8000";
 
   const [documents, setDocuments] = useState<any[]>([]);
+  const [loadingDocs, setLoadingDocs] = useState(true);
+  const [backendAwake, setBackendAwake] = useState(false);
   const [textInputTitle, setTextInputTitle] = useState("");
   const [textInputContent, setTextInputContent] = useState("");
   const [activeTab, setActiveTab] = useState<"pdf" | "text">("pdf");
 
+  // Fetch documents and wake up backend on initial load
   useEffect(() => {
     fetchDocuments();
   }, []);
-const [loadingDocs, setLoadingDocs] = useState(true);
 
-const fetchDocuments = async () => {
-  setLoadingDocs(true);
-  try {
-    const res = await fetch(`${BACKEND_URL}/documents`);
-    const data = await res.json();
-    if (res.ok) setDocuments(data.documents);
-  } catch (err) {
-    console.error("Failed to fetch documents");
-  } finally {
-    setLoadingDocs(false);
-  }
-};
+  const fetchDocuments = async () => {
+    setLoadingDocs(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/documents`);
+      const data = await res.json();
+      if (res.ok) {
+        setDocuments(data.documents);
+        setBackendAwake(true);
+      }
+    } catch (err) {
+      console.error("Backend sleeping or unreachable, retrying...");
+    } finally {
+      setLoadingDocs(false);
+    }
+  };
+
   useEffect(() => {
     const saved = localStorage.getItem("voyageiq-theme");
     const prefersDark = window.matchMedia(
@@ -63,10 +70,7 @@ const fetchDocuments = async () => {
   const toggleTheme = () => {
     const next = !darkMode;
     setDarkMode(next);
-
-    // Explicitly toggle the class on document.documentElement
     document.documentElement.classList.toggle("dark", next);
-
     if (next) {
       localStorage.setItem("voyageiq-theme", "dark");
     } else {
@@ -92,7 +96,7 @@ const fetchDocuments = async () => {
       const data = await res.json();
       if (res.ok) {
         setIngestStatus(`Success! Indexed ${file.name}`);
-        fetchDocuments(); // Refresh documents instantly
+        fetchDocuments();
       } else {
         setIngestStatus(`Error: ${data.detail || "Upload failed"}`);
       }
@@ -122,7 +126,7 @@ const fetchDocuments = async () => {
         setIngestStatus("Success! Text indexed.");
         setTextInputTitle("");
         setTextInputContent("");
-        fetchDocuments(); // Refresh documents instantly
+        fetchDocuments();
       } else {
         setIngestStatus("Error: Failed to save text.");
       }
@@ -172,10 +176,24 @@ const fetchDocuments = async () => {
   };
 
   return (
-    <div className="h-screen w-screen overflow-hidden flex bg-slate-50 text-slate-700 dark:bg-slate-950 dark:text-slate-300 transition-colors duration-300">
+    <div className="h-screen w-screen overflow-hidden flex bg-slate-50 text-slate-700 dark:bg-slate-950 dark:text-slate-300 transition-colors duration-300 relative">
+      {/* MOBILE BACKDROP OVERLAY */}
+      {mobileSidebarOpen && (
+        <div
+          onClick={() => setMobileSidebarOpen(false)}
+          className="fixed inset-0 bg-slate-950/50 z-20 md:hidden backdrop-blur-xs"
+        />
+      )}
+
       {/* SIDEBAR */}
-      <aside className="w-[380px] shrink-0 h-screen overflow-y-auto bg-white/70 dark:bg-slate-900/60 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-colors duration-300">
-        <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between sticky top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md z-10">
+      <aside
+        className={`fixed md:relative inset-y-0 left-0 z-30 w-[300px] sm:w-[350px] md:w-[380px] shrink-0 h-screen overflow-y-auto bg-white/90 md:bg-white/70 dark:bg-slate-900/90 md:dark:bg-slate-900/60 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-transform duration-300 ${
+          mobileSidebarOpen
+            ? "translate-x-0"
+            : "-translate-x-full md:translate-x-0"
+        }`}
+      >
+        <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between sticky top-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md z-10">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center">
               <svg
@@ -197,20 +215,26 @@ const fetchDocuments = async () => {
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <div className="flex items-center gap-1.5 text-xs text-sky-600 dark:text-sky-400 font-mono">
               <span className="relative flex h-2 w-2">
-                <span className="status-dot absolute inline-flex h-full w-full rounded-full bg-sky-500"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
+                <span
+                  className={`absolute inline-flex h-full w-full rounded-full ${backendAwake ? "bg-sky-500 status-dot" : "bg-amber-500"}`}
+                ></span>
+                <span
+                  className={`relative inline-flex rounded-full h-2 w-2 ${backendAwake ? "bg-sky-500" : "bg-amber-500"}`}
+                ></span>
               </span>
-              Theme
+              <span className="hidden sm:inline">
+                {backendAwake ? "online" : "waking up..."}
+              </span>
             </div>
 
             <button
               onClick={toggleTheme}
               type="button"
               aria-label="Toggle theme"
-              className="theme-track relative w-12 h-6 rounded-full bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 flex items-center px-0.5 shrink-0 cursor-pointer"
+              className="theme-track relative w-11 h-6 rounded-full bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 flex items-center px-0.5 shrink-0 cursor-pointer"
             >
               <span className="theme-knob w-5 h-5 rounded-full bg-white dark:bg-slate-950 shadow-sm flex items-center justify-center relative">
                 <svg
@@ -229,10 +253,17 @@ const fetchDocuments = async () => {
                 </svg>
               </span>
             </button>
+
+            <button
+              onClick={() => setMobileSidebarOpen(false)}
+              className="md:hidden text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"
+            >
+              ✕
+            </button>
           </div>
         </div>
 
-        <div className="p-5 space-y-7">
+        <div className="p-4 sm:p-5 space-y-6">
           <section>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-2">
               <svg
@@ -290,9 +321,9 @@ const fetchDocuments = async () => {
                     d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
                   />
                 </svg>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
+                <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
                   {uploadingPdf ? (
-                    "Processing PDF..."
+                    "Processing..."
                   ) : (
                     <>
                       Drop PDFs or{" "}
@@ -321,7 +352,7 @@ const fetchDocuments = async () => {
                 <button
                   onClick={handleTextIngest}
                   disabled={savingText}
-                  className="w-full py-1.5 bg-sky-500 hover:bg-sky-400 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
+                  className="w-full py-1.5 bg-sky-500 hover:bg-sky-400 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   {savingText ? "Vectorizing..." : "Vectorize Text"}
                 </button>
@@ -402,27 +433,48 @@ const fetchDocuments = async () => {
 
       {/* MAIN CHAT AREA */}
       <main className="flex-1 h-screen flex flex-col min-w-0">
-        <header className="shrink-0 px-8 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-md">
-          <div>
-            <h1 className="font-display text-lg font-semibold text-slate-900 dark:text-white tracking-tight">
-              AI Tourist Assistant
-            </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Grounded in your uploaded guides
-            </p>
+        <header className="shrink-0 px-4 sm:px-8 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setMobileSidebarOpen(true)}
+              className="md:hidden p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-lg cursor-pointer"
+              aria-label="Open menu"
+            >
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
+              </svg>
+            </button>
+            <div>
+              <h1 className="font-display text-base sm:text-lg font-semibold text-slate-900 dark:text-white tracking-tight">
+                AI Tourist Assistant
+              </h1>
+              <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
+                Grounded in your uploaded guides
+              </p>
+            </div>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:px-8 sm:py-6 space-y-6">
           {messages.map((msg, index) => (
             <div
               key={index}
               className={`flex gap-3 max-w-3xl ${msg.role === "user" ? "justify-end ml-auto" : ""}`}
             >
               {msg.role === "ai" && (
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center shrink-0">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center shrink-0">
                   <svg
-                    className="w-4 h-4 text-white"
+                    className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -437,7 +489,7 @@ const fetchDocuments = async () => {
                 </div>
               )}
               <div
-                className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                className={`rounded-2xl px-3.5 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm leading-relaxed ${
                   msg.role === "user"
                     ? "bg-sky-500 text-white rounded-tr-sm font-medium"
                     : msg.isError
@@ -451,8 +503,8 @@ const fetchDocuments = async () => {
           ))}
           {loading && (
             <div className="flex gap-3 max-w-3xl">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center shrink-0 animate-pulse"></div>
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-400 rounded-2xl px-4 py-3 text-sm animate-pulse">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center shrink-0 animate-pulse"></div>
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-400 rounded-2xl px-4 py-3 text-xs sm:text-sm animate-pulse">
                 Thinking...
               </div>
             </div>
@@ -460,10 +512,10 @@ const fetchDocuments = async () => {
           <div ref={chatEndRef} />
         </div>
 
-        <div className="shrink-0 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-8 py-4">
+        <div className="shrink-0 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-3 sm:px-8 py-3 sm:py-4">
           <form
             onSubmit={handleSendMessage}
-            className="max-w-3xl mx-auto flex items-end gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl px-3 py-2.5 shadow-sm"
+            className="max-w-3xl mx-auto flex items-end gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl px-3 py-2 shadow-sm"
           >
             <textarea
               rows={1}
@@ -475,13 +527,13 @@ const fetchDocuments = async () => {
                   handleSendMessage(e);
                 }
               }}
-              placeholder="Ask about your documents, travel spots, or guides..."
-              className="flex-1 bg-transparent resize-none text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none py-1.5 max-h-32"
+              placeholder="Ask about your documents or travel spots..."
+              className="flex-1 bg-transparent resize-none text-xs sm:text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none py-1.5 max-h-32"
             />
             <button
               type="submit"
               disabled={loading}
-              className="w-8 h-8 rounded-lg bg-sky-500 hover:bg-sky-400 flex items-center justify-center text-white transition-colors shrink-0 disabled:opacity-50"
+              className="w-8 h-8 rounded-lg bg-sky-500 hover:bg-sky-400 flex items-center justify-center text-white transition-colors shrink-0 disabled:opacity-50 cursor-pointer"
             >
               <svg
                 className="w-4 h-4"

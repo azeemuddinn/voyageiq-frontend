@@ -23,7 +23,8 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const BACKEND_URL = "http://127.0.0.1:8000";
+  const BACKEND_URL =
+    process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:8000";
 
   // Inside your Home component, add document fetching state:
   const [documents, setDocuments] = useState<any[]>([]);

@@ -10,7 +10,6 @@ type Message = {
 
 export default function Home() {
   const [darkMode, setDarkMode] = useState(false);
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [ingestStatus, setIngestStatus] = useState("");
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -21,19 +20,18 @@ export default function Home() {
   ]);
   const [inputQuestion, setInputQuestion] = useState("");
   const [loading, setLoading] = useState(false);
+  const [uploadingPdf, setUploadingPdf] = useState(false);
+  const [savingText, setSavingText] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const BACKEND_URL =
     process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:8000";
 
-  // Inside your Home component, add document fetching state:
   const [documents, setDocuments] = useState<any[]>([]);
-  const [linkInput, setLinkInput] = useState("");
   const [textInputTitle, setTextInputTitle] = useState("");
   const [textInputContent, setTextInputContent] = useState("");
-  const [activeTab, setActiveTab] = useState<"pdf" | "text" | "link">("pdf");
+  const [activeTab, setActiveTab] = useState<"pdf" | "text">("pdf");
 
-  // Fetch documents on load:
   useEffect(() => {
     fetchDocuments();
   }, []);
@@ -47,8 +45,6 @@ export default function Home() {
       console.error("Failed to fetch documents");
     }
   };
-
-  // Call fetchDocuments() right after a successful PDF upload or text ingestion.
 
   useEffect(() => {
     const saved = localStorage.getItem("voyageiq-theme");
@@ -77,7 +73,8 @@ export default function Home() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setIngestStatus("Uploading & vectorizing...");
+    setUploadingPdf(true);
+    setIngestStatus("Uploading & vectorizing PDF...");
     const formData = new FormData();
     formData.append("title", file.name);
     formData.append("file", file);
@@ -90,11 +87,44 @@ export default function Home() {
       const data = await res.json();
       if (res.ok) {
         setIngestStatus(`Success! Indexed ${file.name}`);
+        fetchDocuments(); // Refresh documents instantly
       } else {
-        setIngestStatus(`Error: ${data.detail}`);
+        setIngestStatus(`Error: ${data.detail || "Upload failed"}`);
       }
     } catch (err) {
       setIngestStatus("Failed to connect to backend.");
+    } finally {
+      setUploadingPdf(false);
+    }
+  };
+
+  const handleTextIngest = async () => {
+    if (!textInputTitle || !textInputContent || savingText) return;
+
+    setSavingText(true);
+    setIngestStatus("Vectorizing text...");
+    try {
+      const res = await fetch(`${BACKEND_URL}/ingest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: textInputTitle,
+          content: textInputContent,
+          source_type: "text",
+        }),
+      });
+      if (res.ok) {
+        setIngestStatus("Success! Text indexed.");
+        setTextInputTitle("");
+        setTextInputContent("");
+        fetchDocuments(); // Refresh documents instantly
+      } else {
+        setIngestStatus("Error: Failed to save text.");
+      }
+    } catch (err) {
+      setIngestStatus("Failed to connect to backend.");
+    } finally {
+      setSavingText(false);
     }
   };
 
@@ -114,7 +144,7 @@ export default function Home() {
         body: JSON.stringify({ question: userText }),
       });
       const data = await res.json();
-      const answer = data.answer || data.detail;
+      const answer = data.answer || data.detail || "No response received.";
       const isMissing = answer.includes("I cannot find that");
 
       setMessages((prev) => [
@@ -198,7 +228,6 @@ export default function Home() {
         </div>
 
         <div className="p-5 space-y-7">
-          {/* Knowledge Base Ingestion Tabs */}
           <section>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-2">
               <svg
@@ -233,11 +262,14 @@ export default function Home() {
             </div>
 
             {activeTab === "pdf" ? (
-              <label className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-4 text-center hover:border-sky-500/50 hover:bg-sky-50 dark:hover:bg-slate-800/30 transition-colors cursor-pointer block group">
+              <label
+                className={`border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-4 text-center transition-colors block group ${uploadingPdf ? "opacity-50 cursor-not-allowed" : "hover:border-sky-500/50 hover:bg-sky-50 dark:hover:bg-slate-800/30 cursor-pointer"}`}
+              >
                 <input
                   type="file"
                   accept="application/pdf"
                   onChange={handleFileUpload}
+                  disabled={uploadingPdf}
                   className="hidden"
                 />
                 <svg
@@ -254,10 +286,16 @@ export default function Home() {
                   />
                 </svg>
                 <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Drop PDFs or{" "}
-                  <span className="text-sky-600 dark:text-sky-400 font-medium">
-                    browse
-                  </span>
+                  {uploadingPdf ? (
+                    "Processing PDF..."
+                  ) : (
+                    <>
+                      Drop PDFs or{" "}
+                      <span className="text-sky-600 dark:text-sky-400 font-medium">
+                        browse
+                      </span>
+                    </>
+                  )}
                 </p>
               </label>
             ) : (
@@ -276,28 +314,11 @@ export default function Home() {
                   className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-700 dark:text-slate-200 h-20 resize-none"
                 />
                 <button
-                  onClick={async () => {
-                    if (!textInputTitle || !textInputContent) return;
-                    setIngestStatus("Saving text...");
-                    const res = await fetch(`${BACKEND_URL}/ingest`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        title: textInputTitle,
-                        content: textInputContent,
-                        source_type: "text",
-                      }),
-                    });
-                    if (res.ok) {
-                      setIngestStatus("Success!");
-                      setTextInputTitle("");
-                      setTextInputContent("");
-                      fetchDocuments();
-                    }
-                  }}
-                  className="w-full py-1.5 bg-sky-500 hover:bg-sky-400 text-white rounded-lg text-xs font-semibold transition-colors"
+                  onClick={handleTextIngest}
+                  disabled={savingText}
+                  className="w-full py-1.5 bg-sky-500 hover:bg-sky-400 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
                 >
-                  Vectorize Text
+                  {savingText ? "Vectorizing..." : "Vectorize Text"}
                 </button>
               </div>
             )}
@@ -308,7 +329,6 @@ export default function Home() {
               </p>
             )}
 
-            {/* Dynamic Document List */}
             <ul className="mt-4 space-y-1.5">
               {documents.map((doc) => (
                 <li
@@ -405,6 +425,14 @@ export default function Home() {
               </div>
             </div>
           ))}
+          {loading && (
+            <div className="flex gap-3 max-w-3xl">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center shrink-0 animate-pulse"></div>
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-400 rounded-2xl px-4 py-3 text-sm animate-pulse">
+                Thinking...
+              </div>
+            </div>
+          )}
           <div ref={chatEndRef} />
         </div>
 
@@ -429,7 +457,7 @@ export default function Home() {
             <button
               type="submit"
               disabled={loading}
-              className="w-8 h-8 rounded-lg bg-sky-500 hover:bg-sky-400 flex items-center justify-center text-white transition-colors shrink-0 disabled:bg-slate-300"
+              className="w-8 h-8 rounded-lg bg-sky-500 hover:bg-sky-400 flex items-center justify-center text-white transition-colors shrink-0 disabled:opacity-50"
             >
               <svg
                 className="w-4 h-4"

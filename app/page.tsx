@@ -60,11 +60,13 @@ export default function Home() {
   const toggleTheme = () => {
     const next = !darkMode;
     setDarkMode(next);
+
+    // Explicitly toggle the class on document.documentElement
+    document.documentElement.classList.toggle("dark", next);
+
     if (next) {
-      document.documentElement.classList.add("dark");
       localStorage.setItem("voyageiq-theme", "dark");
     } else {
-      document.documentElement.classList.remove("dark");
       localStorage.setItem("voyageiq-theme", "light");
     }
   };
@@ -198,14 +200,14 @@ export default function Home() {
                 <span className="status-dot absolute inline-flex h-full w-full rounded-full bg-sky-500"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
               </span>
-              online
+              Theme
             </div>
 
             <button
               onClick={toggleTheme}
               type="button"
               aria-label="Toggle theme"
-              className="theme-track relative w-12 h-6 rounded-full bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 flex items-center px-0.5 shrink-0"
+              className="theme-track relative w-12 h-6 rounded-full bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 flex items-center px-0.5 shrink-0 cursor-pointer"
             >
               <span className="theme-knob w-5 h-5 rounded-full bg-white dark:bg-slate-950 shadow-sm flex items-center justify-center relative">
                 <svg

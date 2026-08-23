@@ -1,69 +1,206 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
 
 export default function Home() {
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [uploadType, setUploadType] = useState<"text" | "pdf">("text");
+
+  const [docId, setDocId] = useState("");
+  const [ingestStatus, setIngestStatus] = useState("");
+
+  const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const BACKEND_URL = "http://127.0.0.1:8000";
+
+  const handleIngest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIngestStatus("Ingesting and embedding...");
+
+    try {
+      if (uploadType === "text") {
+        const res = await fetch(`${BACKEND_URL}/ingest`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, content, source_type: "text" }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setDocId(data.document_id);
+          setIngestStatus(`Success! Document saved (ID: ${data.document_id})`);
+        } else {
+          setIngestStatus(`Error: ${data.detail}`);
+        }
+      } else {
+        if (!pdfFile) {
+          setIngestStatus("Please select a PDF file.");
+          return;
+        }
+        const formData = new FormData();
+        formData.append("title", title);
+        formData.append("file", pdfFile);
+
+        const res = await fetch(`${BACKEND_URL}/ingest-pdf`, {
+          method: "POST",
+          body: formData,
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setDocId(data.document_id);
+          setIngestStatus(
+            `Success! PDF saved & vectorized (ID: ${data.document_id})`,
+          );
+        } else {
+          setIngestStatus(`Error: ${data.detail}`);
+        }
+      }
+    } catch (err) {
+      setIngestStatus("Failed to connect to backend.");
+    }
+  };
+
+  const handleChat = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setAnswer("");
+    try {
+      const res = await fetch(`${BACKEND_URL}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, document_id: docId || null }),
+      });
+      const data = await res.json();
+      setAnswer(data.answer || data.detail);
+    } catch (err) {
+      setAnswer("Failed to fetch response from backend.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <main className="max-w-4xl mx-auto p-6 font-sans">
+      <h1 className="text-3xl font-bold mb-6 text-blue-600">
+        VoyageIQ Dashboard
+      </h1>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* Ingest Section */}
+        <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+          <h2 className="text-xl font-semibold mb-4">
+            1. Ingest Travel Document
+          </h2>
+
+          <div className="flex space-x-4 mb-4">
+            <button
+              type="button"
+              onClick={() => setUploadType("text")}
+              className={`px-3 py-1 rounded-md text-sm ${uploadType === "text" ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-700"}`}
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+              Paste Text
+            </button>
+            <button
+              type="button"
+              onClick={() => setUploadType("pdf")}
+              className={`px-3 py-1 rounded-md text-sm ${uploadType === "pdf" ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-700"}`}
             >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+              Upload PDF
+            </button>
+          </div>
+
+          <form onSubmit={handleIngest} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Document Title
+              </label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="w-full mt-1 p-2 border rounded-md"
+                placeholder="e.g., Tokyo Guide"
+                required
+              />
+            </div>
+
+            {uploadType === "text" ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Content / Chunks
+                </label>
+                <textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  className="w-full mt-1 p-2 border rounded-md h-32"
+                  placeholder="Paste text paragraphs here..."
+                  required
+                />
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Select PDF File
+                </label>
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
+                  className="w-full mt-1 p-2 border rounded-md"
+                  required
+                />
+              </div>
+            )}
+
+            <button
+              type="submit"
+              className="w-full bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700"
+            >
+              Upload & Vectorize
+            </button>
+          </form>
+          {ingestStatus && (
+            <p className="mt-4 text-sm text-gray-600">{ingestStatus}</p>
+          )}
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        {/* Chat / Query Section */}
+        <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+          <h2 className="text-xl font-semibold mb-4">2. Chat with Your Data</h2>
+          <form onSubmit={handleChat} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Ask a Question
+              </label>
+              <input
+                type="text"
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
+                className="w-full mt-1 p-2 border rounded-md"
+                placeholder="e.g., What can I eat at Tsukiji Market?"
+                required
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-green-600 text-white p-2 rounded-md hover:bg-green-700 disabled:bg-gray-400"
+            >
+              {loading ? "Thinking..." : "Ask AI"}
+            </button>
+          </form>
+
+          {answer && (
+            <div className="mt-6 p-4 bg-gray-50 rounded-md border border-gray-200">
+              <h3 className="font-semibold text-gray-800">AI Answer:</h3>
+              <p className="mt-2 text-gray-700 whitespace-pre-wrap">{answer}</p>
+            </div>
+          )}
         </div>
-      </main>
-    </div>
+      </div>
+    </main>
   );
 }
